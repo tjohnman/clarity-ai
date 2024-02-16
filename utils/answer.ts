@@ -1,11 +1,11 @@
 import { OpenAIModel } from "@/types";
 import { createParser, ParsedEvent, ReconnectInterval } from "eventsource-parser";
 
-export const OpenAIStream = async (prompt: string, apiKey: string) => {
+export const OpenAIStream = async (prompt: string, apiURL: string, apiKey: string) => {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  const res = await fetch(apiURL, {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`

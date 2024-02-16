@@ -9,10 +9,20 @@ interface SearchProps {
   onDone: (done: boolean) => void;
 }
 
-export const Search: FC<SearchProps> = ({ onSearch, onAnswerUpdate, onDone }) => {
+export const DefaultOpenAIURL: string =
+  "https://api.openai.com/v1/chat/completions";
+
+export const Search: FC<SearchProps> = ({
+  onSearch,
+  onAnswerUpdate,
+  onDone,
+}) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState<string>("");
+  const [apiURL, setApiURL] = useState<string>(
+    "https://api.openai.com/v1/chat/completions",
+  );
   const [apiKey, setApiKey] = useState<string>("");
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -32,9 +42,9 @@ export const Search: FC<SearchProps> = ({ onSearch, onAnswerUpdate, onDone }) =>
     const response = await fetch("/api/sources", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ query })
+      body: JSON.stringify({ query }),
     });
 
     if (!response.ok) {
@@ -50,16 +60,16 @@ export const Search: FC<SearchProps> = ({ onSearch, onAnswerUpdate, onDone }) =>
   const handleStream = async (sources: Source[]) => {
     try {
       const prompt = endent`Provide a 2-3 sentence answer to the query based on the following sources. Be original, concise, accurate, and helpful. Cite sources as [1] or [2] or [3] after each sentence (not just the very end) to back up your answer (Ex: Correct: [1], Correct: [2][3], Incorrect: [1, 2]).
-      
+
       ${sources.map((source, idx) => `Source [${idx + 1}]:\n${source.text}`).join("\n\n")}
       `;
 
       const response = await fetch("/api/answer", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prompt, apiKey })
+        body: JSON.stringify({ prompt, apiURL, apiKey }),
       });
 
       if (!response.ok) {
@@ -100,12 +110,14 @@ export const Search: FC<SearchProps> = ({ onSearch, onAnswerUpdate, onDone }) =>
   };
 
   const handleSave = () => {
-    if (apiKey.length !== 51) {
-      alert("Please enter a valid API key.");
-      return;
-    }
-
     localStorage.setItem("CLARITY_KEY", apiKey);
+
+    if (apiURL.trim().length > 0) {
+      localStorage.setItem("CLARITY_URL", apiURL);
+    } else {
+      setApiURL(DefaultOpenAIURL);
+      localStorage.setItem("CLARITY_URL", DefaultOpenAIURL);
+    }
 
     setShowSettings(false);
     inputRef.current?.focus();
@@ -113,17 +125,24 @@ export const Search: FC<SearchProps> = ({ onSearch, onAnswerUpdate, onDone }) =>
 
   const handleClear = () => {
     localStorage.removeItem("CLARITY_KEY");
+    localStorage.setItem("CLARITY_URL", DefaultOpenAIURL);
 
     setApiKey("");
+    setApiURL("");
   };
 
   useEffect(() => {
     const CLARITY_KEY = localStorage.getItem("CLARITY_KEY");
+    const CLARITY_URL = localStorage.getItem("CLARITY_URL");
 
     if (CLARITY_KEY) {
       setApiKey(CLARITY_KEY);
     } else {
       setShowSettings(true);
+    }
+
+    if (CLARITY_URL) {
+      setApiURL(CLARITY_URL);
     }
 
     inputRef.current?.focus();
@@ -132,7 +151,7 @@ export const Search: FC<SearchProps> = ({ onSearch, onAnswerUpdate, onDone }) =>
   return (
     <>
       {loading ? (
-        <div className="flex items-center justify-center pt-64 sm:pt-72 flex-col">
+        <div className="flex flex-col items-center justify-center pt-64 sm:pt-72">
           <div className="inline-block h-16 w-16 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
           <div className="mt-8 text-2xl">Getting answer...</div>
         </div>
@@ -143,13 +162,13 @@ export const Search: FC<SearchProps> = ({ onSearch, onAnswerUpdate, onDone }) =>
             <div className="ml-1 text-center text-4xl">Clarity</div>
           </div>
 
-          {apiKey.length === 51 ? (
+          {apiKey.length > 0 ? (
             <div className="relative w-full">
-              <IconSearch className="text=[#D4D4D8] absolute top-3 w-10 left-1 h-6 rounded-full opacity-50 sm:left-3 sm:top-4 sm:h-8" />
+              <IconSearch className="text=[#D4D4D8] absolute left-1 top-3 h-6 w-10 rounded-full opacity-50 sm:left-3 sm:top-4 sm:h-8" />
 
               <input
                 ref={inputRef}
-                className="h-12 w-full rounded-full border border-zinc-600 bg-[#2A2A31] pr-12 pl-11 focus:border-zinc-800 focus:bg-[#18181C] focus:outline-none focus:ring-2 focus:ring-zinc-800 sm:h-16 sm:py-2 sm:pr-16 sm:pl-16 sm:text-lg"
+                className="h-12 w-full rounded-full border border-zinc-600 bg-[#2A2A31] pl-11 pr-12 focus:border-zinc-800 focus:bg-[#18181C] focus:outline-none focus:ring-2 focus:ring-zinc-800 sm:h-16 sm:py-2 sm:pl-16 sm:pr-16 sm:text-lg"
                 type="text"
                 placeholder="Ask anything..."
                 value={query}
@@ -165,7 +184,9 @@ export const Search: FC<SearchProps> = ({ onSearch, onAnswerUpdate, onDone }) =>
               </button>
             </div>
           ) : (
-            <div className="text-center text-[#D4D4D8]">Please enter your OpenAI API key.</div>
+            <div className="text-center text-[#D4D4D8]">
+              Please enter your OpenAI-compatible API URL and key.
+            </div>
           )}
 
           <button
@@ -178,9 +199,19 @@ export const Search: FC<SearchProps> = ({ onSearch, onAnswerUpdate, onDone }) =>
           {showSettings && (
             <>
               <input
+                type="text"
+                className="block w-full max-w-[400px] rounded-md border border-gray-300 p-2 text-black shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-sm"
+                value={apiURL}
+                placeholder={DefaultOpenAIURL}
+                onChange={(e) => {
+                  setApiURL(e.target.value);
+                }}
+              />
+              <input
                 type="password"
-                className="max-w-[400px] block w-full rounded-md border border-gray-300 p-2 text-black shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-sm"
+                className="block w-full max-w-[400px] rounded-md border border-gray-300 p-2 text-black shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-sm"
                 value={apiKey}
+                placeholder="Enter your API key here."
                 onChange={(e) => {
                   setApiKey(e.target.value);
 
